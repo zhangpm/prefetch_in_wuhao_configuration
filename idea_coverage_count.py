@@ -61,6 +61,7 @@ if __name__ == '__main__':
         os_process(process_str)
         process_str = "./run_champsim.sh {} {} {} {}".format(binary_name1, n_warm, n_sim, trace_name)
         os_process(process_str)
-        process_str = "mv target_ip_pattern.txt coverage_result/{}pattern.txt".format(trace_name + "—" + str(n_warm) + "-" + str(n_sim) + "-")
         #统计覆盖率
-        coverage_count(trace_name + "—" + str(n_warm) + "-" + str(n_sim) + "-")
+        coverage_count("coverage_result/" + trace_name + "—" + str(n_warm) + "-" + str(n_sim) + "-")
+        process_str = "mv target_ip_pattern.txt coverage_result/{}pattern.txt".format(trace_name + "—" + str(n_warm) + "-" + str(n_sim) + "-")
+        os_process(process_str)
