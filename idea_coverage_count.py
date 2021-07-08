@@ -8,7 +8,7 @@ core_num = 1
 assoc_num = 2
 repl_name = "lru"
 binary_name0 = "perceptron-ip_page_change_frequency-no-no-lru-1core-assoc2"
-n_warm = 200
+n_warm = 10
 n_sim = 50
 binary_name1 = "perceptron-find_pattern-no-no-lru-1core-assoc2"
 
@@ -61,5 +61,6 @@ if __name__ == '__main__':
         os_process(process_str)
         process_str = "./run_champsim.sh {} {} {} {}".format(binary_name1, n_warm, n_sim, trace_name)
         os_process(process_str)
+        process_str = "mv target_ip_pattern.txt coverage_result/{}pattern.txt".format(trace_name + "—" + str(n_warm) + "-" + str(n_sim) + "-")
         #统计覆盖率
         coverage_count(trace_name + "—" + str(n_warm) + "-" + str(n_sim) + "-")
