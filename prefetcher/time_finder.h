@@ -35,6 +35,7 @@ public:
     Time_finder(){};
     void train(uint64_t ip, uint64_t cache_line, uint64_t page, vector<uint64_t>erase_time_ips);
     vector<uint64_t> predict(uint64_t ip, uint64_t cache_line);
+    int get_time_recorder_size();
 
 private:
     void update_time_recorder(uint64_t ip, uint64_t start_addr, uint64_t next_addr);

@@ -181,7 +181,11 @@ void Time_finder::train(uint64_t ip, uint64_t cache_line, uint64_t page,  vector
         }
     }
     this->update_ip_last_addr(ip, cache_line);
+}
 
+int Time_finder::get_time_recorder_size() {
+    int ip_num = time_recorder.size();
+    return ip_num;
 }
 
 

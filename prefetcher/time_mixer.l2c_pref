@@ -311,6 +311,12 @@ void CACHE::l2c_prefetcher_initialize()
 
 uint64_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit, uint8_t type, uint64_t metadata_in)
 {
+    if(ipClassifier_l2->get_important_ips().size() > IMPORTANT_IPS_SIZE) {
+        cout<<"important_ips的大小大于:" + to_string(IMPORTANT_IPS_SIZE);
+    }
+    if(time_finder->get_time_recorder_size() > IMPORTANT_IPS_SIZE) {
+        cout<<"time_recorder的大小大于:" + to_string(IMPORTANT_IPS_SIZE);
+    }
     //time_ip
     ipClassifier_l2->update(ip, addr);
     vector<uint64_t> important_ips_l2 = ipClassifier_l2->get_important_ips();
