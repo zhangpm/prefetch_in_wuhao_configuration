@@ -28,7 +28,7 @@ void Ip_classifier::update_important_ips(uint64_t ip) {
         for (auto it : this->important_ip_map) {//更新计数器
             it.second += 1;
         }
-        if (this->important_ip_map.size() == IMPORTANT_IPS_SIZE){//如果满了，寻找需要替换的位置
+        if (this->important_ip_map.size() == IMPORTANT_IPS_SIZE) {//如果满了，寻找需要替换的位置
             auto victim = this->important_ip_map.begin();
             for (auto it = this->important_ip_map.begin(); it != this->important_ip_map.end(); it++) {
                 if (it -> second > victim->second){
@@ -39,7 +39,6 @@ void Ip_classifier::update_important_ips(uint64_t ip) {
             this->erase_ips.push_back(victim->first);
         }
         this->important_ip_map[ip] = 0;
-        this->new_time_ips.push_back(ip);
     }
     else{
         this->important_ip_map[ip] = 0;
@@ -50,7 +49,6 @@ void Ip_classifier::update_important_ips(uint64_t ip) {
  * 
  **/
 void Ip_classifier::update(uint64_t ip, uint64_t addr) {
-    this->new_time_ips.clear();
     this->erase_ips.clear();
     //update
     uint64_t cacheline = addr >> LOG2_BLOCK_SIZE;
@@ -72,7 +70,7 @@ void Ip_classifier::update(uint64_t ip, uint64_t addr) {
             return;
         }
         if (page == last_page){//没有换页
-            this->ip_jump[ip].first -= 1;//为什么要减一？
+            this->ip_jump[ip].first -= 1;
             this->ip_jump[ip].second += 1;
             //kong jian
             if (this->ip_jump[ip].first < VICTIM_THRESHOLD ){

@@ -100,7 +100,7 @@ void Time_finder::update_time_recorder(uint64_t ip, uint64_t start_addr, uint64_
         else{
             if (this->time_recorder[ip][index].next_addr.conf == 0){
                 this->time_recorder[ip][index].next_addr.addr = next_addr;
-                this->time_recorder[ip][index].next_addr.conf = DEFAULT_CONF;
+                this->time_recorder[ip][index].next_addr.conf = 0;//DEFAULT_CONF
                 //lru
                 for (auto it : this->time_recorder[ip]) {
                     it.lru += 1;
@@ -122,7 +122,7 @@ void Time_finder::update_time_recorder(uint64_t ip, uint64_t start_addr, uint64_
         if (this->time_recorder[ip].size() < ENTRY_NUM){
             Next_addr nextAddr;
             nextAddr.addr = next_addr;
-            nextAddr.conf = DEFAULT_CONF;
+            nextAddr.conf = 0;//DEFAULT_CONF
             Addr_pair addrPair;
             addrPair.start_addr = start_addr;
             addrPair.next_addr = nextAddr;
@@ -140,7 +140,7 @@ void Time_finder::update_time_recorder(uint64_t ip, uint64_t start_addr, uint64_
             //add new pair
             Next_addr nextAddr;
             nextAddr.addr = next_addr;
-            nextAddr.conf = DEFAULT_CONF;
+            nextAddr.conf = 0;
             this->time_recorder[ip][victim_index].lru = 0;
             this->time_recorder[ip][victim_index].start_addr = start_addr;
             this->time_recorder[ip][victim_index].next_addr = nextAddr;
