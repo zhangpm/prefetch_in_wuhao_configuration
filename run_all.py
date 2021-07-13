@@ -16,12 +16,12 @@ def os_process(process_str):
     return return_code
 
 if __name__=="__main__":
+    #编译
+    process_str = "./build_champsim.sh {} {} {} {} {} {} {}".format(branch_name, binary_name0.split("-")[1], binary_name0.split("-")[2], binary_name0.split("-")[3], repl_name, core_num, assoc_num)
+    os_process(process_str)
     for trace_name in os.listdir(trace_dir):
-        if("483.xalancbmk-736B" not in trace_name):
+        if("429.mcf-184B" not in trace_name):
             continue
-        #编译
-        process_str = "./build_champsim.sh {} {} {} {} {} {} {}".format(branch_name, binary_name0.split("-")[1], binary_name0.split("-")[2], binary_name0.split("-")[3], repl_name, core_num, assoc_num)
-        os_process(process_str)
         #执行
         process_str = "./run_champsim.sh {} {} {} {}".format(binary_name0, n_warm, n_sim, trace_name)
         os_process(process_str)

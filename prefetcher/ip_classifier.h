@@ -10,7 +10,7 @@
 #include <vector>
 
 #define FINISH_THRESHOLD 5
-#define IMPORTANT_IPS_SIZE 5
+#define IMPORTANT_IPS_SIZE 20
 #define IP_NUM 64 //用于训练学习的ip个数
 #define VICTIM_THRESHOLD -5
 using namespace std;

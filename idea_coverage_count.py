@@ -1,6 +1,6 @@
 import os
 import subprocess
-from coverage_count import coverage_count
+from coverage_count import coverage_count, coverage_count_old
 
 trace_dir = "/home/hkucs/ljz/dpc3_traces"
 branch_name = "perceptron"
@@ -62,6 +62,6 @@ if __name__ == '__main__':
         process_str = "./run_champsim.sh {} {} {} {}".format(binary_name1, n_warm, n_sim, trace_name)
         os_process(process_str)
         #统计覆盖率
-        coverage_count("coverage_result/" + trace_name + "—" + str(n_warm) + "-" + str(n_sim) + "-")
+        coverage_count_old("coverage_result/" + trace_name + "—" + str(n_warm) + "-" + str(n_sim) + "-")
         process_str = "mv target_ip_pattern.txt coverage_result/{}pattern.txt".format(trace_name + "—" + str(n_warm) + "-" + str(n_sim) + "-")
         os_process(process_str)

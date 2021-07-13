@@ -8,13 +8,15 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <algorithm>
 
 using namespace std;
 
 //< 50  106 40%   ip:5  entry:20    <500
-#define ENTRY_NUM 20
+#define TRAINING_ENTRY_NUM 300
+#define TRAINED_ENTRY_NUM 300
 //改成动态调整的形式
-#define PREFETCH_DEGREE 3
+#define PREFETCH_DEGREE 2
 #define DEFAULT_CONF 3
 
 struct Next_addr{
@@ -32,17 +34,21 @@ class Time_finder{
 
 public:
     Time_finder(){};
-    void train(uint64_t ip, uint64_t cache_line, uint64_t page, vector<uint64_t>erase_time_ips);
-    vector<uint64_t> predict(uint64_t ip, uint64_t cache_line);
-    int get_time_recorder_size();
+    void train(uint64_t ip, uint64_t cache_line, uint64_t page);
+    vector<uint64_t> predict(uint64_t cache_line);
+    int get_trained_time_recorder_size();
+    int get_training_time_recorder_size();
     void repl_ip(vector<uint64_t> erase_ips);
 
 private:
-    void update_time_recorder(uint64_t ip, uint64_t start_addr, uint64_t next_addr);
+    void update_time_recorder(uint64_t start_addr, uint64_t next_addr);
+    void update_training_time_recorder(uint64_t start_addr, uint64_t next_addr);
+    void update_trained_time_recorder(uint64_t start_addr, uint64_t next_addr);
     void update_ip_last_addr(uint64_t ip, uint64_t addr);
-    uint64_t find_next_addr(uint64_t ip, uint64_t addr);
+    uint64_t find_next_addr(uint64_t addr);
     //置换策略需要修改，参考wuhao
-    map<uint64_t, vector<Addr_pair>> time_recorder;
+    vector<Addr_pair> training_time_recorder;
+    vector<Addr_pair> trained_time_recorder;
     //ip, last cache line
     map<uint64_t, uint64_t> ip_last_addr;
 
