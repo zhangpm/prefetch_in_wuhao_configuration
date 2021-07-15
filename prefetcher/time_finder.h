@@ -16,7 +16,7 @@ using namespace std;
 #define TRAINING_ENTRY_NUM 300
 #define TRAINED_ENTRY_NUM 300
 //改成动态调整的形式
-#define PREFETCH_DEGREE 2
+#define PREFETCH_DEGREE 1
 #define DEFAULT_CONF 3
 
 struct Next_addr{

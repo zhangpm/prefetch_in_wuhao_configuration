@@ -34,6 +34,13 @@ uint64_t Time_finder::find_next_addr(uint64_t addr)
             return addr_it.next_addr.addr;
         }
     }
+    for (auto addr_it : training_time_recorder)
+    {
+        if (addr == addr_it.start_addr)
+        {
+            return addr_it.next_addr.addr;
+        }
+    }
     return -1;
 }
 

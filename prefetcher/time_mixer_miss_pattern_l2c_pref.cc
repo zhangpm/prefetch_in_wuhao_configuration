@@ -231,7 +231,8 @@ namespace mix_time_l2
 
     //important
     //vector<uint64_t> important_ips;
-    vector<uint64_t> import_ips;
+    map<uint64_t, vector<uint64_t>> ip_pattern;
+    ChampSimLog cslog("l2c_ip_pattern.txt");
 
     vector<uint64_t> read_important_files(string file_path)
     {
@@ -341,8 +342,6 @@ void CACHE::l2c_prefetcher_initialize()
     total_num = 0;
     training_num = 0;
     trained_num = 0;
-    //important_ips = read_important_files("important_ips.txt");
-    import_ips = read_important_files("import_ips.txt");
 }
 
 uint64_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit, uint8_t type, uint64_t metadata_in)
@@ -365,27 +364,26 @@ uint64_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache
         training_num++;
     }
     //time_ip
-    if (type == LOAD)
-    {
-        if (import_ips.end() != find(import_ips.begin(), import_ips.end(), ip))
+    ipClassifier_l2->update(ip, addr);
+    time_finder->repl_ip(ipClassifier_l2->get_erase_time_ip());
+    vector<uint64_t> important_ips_l2 = ipClassifier_l2->get_important_ips();
+    //如果是时间特征的ip
+    if (important_ips_l2.end() != find(important_ips_l2.begin(), important_ips_l2.end(), ip))
+    { //这里应该是找到了吧？
+        if (ip_pattern.find(ip) == ip_pattern.end())
         {
-            ipClassifier_l2->update(ip, addr);
-            time_finder->repl_ip(ipClassifier_l2->get_erase_time_ip());
-            vector<uint64_t> important_ips_l2 = ipClassifier_l2->get_important_ips();
-            //如果是时间特征的ip
-            if (important_ips_l2.end() != find(important_ips_l2.begin(), important_ips_l2.end(), ip))
-            { //这里应该是找到了吧？
-                uint64_t cache_line = (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE;
-                uint64_t page = addr >> LOG2_PAGE_SIZE;
-                vector<uint64_t> pf_addresses = time_finder->predict(cache_line);
-                time_finder->train(ip, cache_line, page);
-                //vector<uint64_t>pf_addresses = make_prefetch_by_time(ip, (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE);
+            ip_pattern[ip] = vector<uint64_t>();
+        }
+        ip_pattern[ip].push_back(addr);
+        uint64_t cache_line = (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE;
+        uint64_t page = addr >> LOG2_PAGE_SIZE;
+        vector<uint64_t> pf_addresses = time_finder->predict(cache_line);
+        time_finder->train(ip, cache_line, page);
+        //vector<uint64_t>pf_addresses = make_prefetch_by_time(ip, (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE);
 
-                for (int i = 0; i < pf_addresses.size(); ++i)
-                {
-                    prefetch_line(ip, addr, pf_addresses[i], FILL_L2, 0);
-                }
-            }
+        for (int i = 0; i < pf_addresses.size(); ++i)
+        {
+            prefetch_line(ip, addr, pf_addresses[i], FILL_L2, 0);
         }
     }
 
@@ -529,10 +527,17 @@ void CACHE::l2c_prefetcher_final_stats()
     cout << "total operate time ：" << to_string(total_num) << endl;
     cout << "trained num access half time: " << to_string(trained_num) << endl;
     cout << "training num access half time: " << to_string(training_num) << endl;
-    cout << "l2c import_ips: " << endl;
-    for (int i = 0; i < import_ips.size(); i++)
-    {
-        cout << import_ips[i] << endl;
+
+    for (auto ip_itor = ip_pattern.begin(); ip_itor != ip_pattern.end() ; ip_itor++) {
+        cslog.makeLog(string("ip :　" + to_string(ip_itor->first)), true);
+        for (auto addr_itor = ip_itor->second.begin(); addr_itor != ip_itor->second.end() ; addr_itor++) {
+            uint64_t addr = *addr_itor;
+            uint64_t curr_page = addr >> LOG2_PAGE_SIZE; 	//current page
+            uint64_t line_offset = (addr >> LOG2_BLOCK_SIZE) & 0x3F; 	//cache line offset
+            cslog.makeLog(string("addr : " + to_string(addr) + " page : " + to_string(curr_page) + " offset : " + to_string(line_offset)), true);
+
+        }
+        cslog.makeLog(("**************"), true);
     }
 }
 

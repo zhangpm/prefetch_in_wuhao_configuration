@@ -19,7 +19,7 @@ def get_ipc(path):
             return line.split(" ")[4].strip()
 
 write_file = open("compare.txt", "w+", encoding = "utf-8")
-write_file.write("trace_name".rjust(40, " ") + baseline_dir.rjust(result_rjust_len, " ") + bo_dir.rjust(result_rjust_len, " ") + bo_triage_dir.rjust(result_rjust_len, " ") + triage_dir.rjust(result_rjust_len, " "))
+write_file.write("trace_name".rjust(40, " ") + baseline_dir.rjust(result_rjust_len, " ") + bo_dir.rjust(result_rjust_len, " ") + bo_triage_dir.rjust(result_rjust_len, " ") + triage_dir.rjust(result_rjust_len, " ") + "ipcp".rjust(result_rjust_len) + "offline".rjust(result_rjust_len) + "online".rjust(result_rjust_len))
 write_file.write("\n")
 
 for child_dir in child_dirs:
