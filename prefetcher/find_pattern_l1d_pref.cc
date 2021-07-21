@@ -13,6 +13,7 @@ using namespace std;
 vector<uint64_t> important_ips = {};
 map<uint64_t, vector<uint64_t>> ip_pattern;
 ChampSimLog cslog("target_ip_pattern.txt");
+ChampSimLog cslog1("target_mix_pattern.txt");
 uint64_t total_pattern_num;
 
 
@@ -42,6 +43,7 @@ void CACHE::l1d_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit
          }
          ip_pattern[ip].push_back(addr);
     }
+    cslog1.makeLog(string("ip:" + to_string(ip) + " page:" + to_string(addr >> LOG2_PAGE_SIZE) + " offset:" + to_string((addr >> LOG2_BLOCK_SIZE) & 0X3F )), true);
 }
 
 void CACHE::l1d_prefetcher_cache_fill(uint64_t addr, uint32_t set, uint32_t way, uint8_t prefetch, uint64_t evicted_addr, uint64_t metadata_in)

@@ -9,10 +9,10 @@
 #include <iostream>
 #include <vector>
 
-#define FINISH_THRESHOLD 5
+#define FINISH_THRESHOLD 3
 #define IMPORTANT_IPS_SIZE 20
 #define IP_NUM 64 //用于训练学习的ip个数
-#define VICTIM_THRESHOLD -5
+#define VICTIM_THRESHOLD -3
 using namespace std;
 
 class Ip_classifier{

@@ -1,28 +1,23 @@
 /*************************************************************************************************************************
-Authors:
+Authors: 
 Samuel Pakalapati - samuelpakalapati@gmail.com
 Biswabandan Panda - biswap@cse.iitk.ac.in
 Nilay Shah - nilays@iitk.ac.in
-Neelu Shivprakash kalani - neeluk@cse.iitk.ac.in
+Neelu Shivprakash kalani - neeluk@cse.iitk.ac.in 
 **************************************************************************************************************************/
 /*************************************************************************************************************************
-Source code for "Bouquet of Instruction Pointers: Instruction Pointer Classifier-based Spatial Hardware Prefetching"
-appeared (to appear) in ISCA 2020: https://www.iscaconf.org/isca2020/program/. The paper is available at
-https://www.cse.iitk.ac.in/users/biswap/IPCP_ISCA20.pdf. The source code can be used with the ChampSim simulator
-https://github.com/ChampSim . Note that the authors have used a modified ChampSim that supports detailed virtual
+Source code for "Bouquet of Instruction Pointers: Instruction Pointer Classifier-based Spatial Hardware Prefetching" 
+appeared (to appear) in ISCA 2020: https://www.iscaconf.org/isca2020/program/. The paper is available at 
+https://www.cse.iitk.ac.in/users/biswap/IPCP_ISCA20.pdf. The source code can be used with the ChampSim simulator 
+https://github.com/ChampSim . Note that the authors have used a modified ChampSim that supports detailed virtual 
 memory sub-system. Performance numbers may increase/decrease marginally
-based on the virtual memory-subsystem support. Also for PIPT L1-D caches, this code may demand 1 to 1.5KB additional
-storage for various hardware tables.
+based on the virtual memory-subsystem support. Also for PIPT L1-D caches, this code may demand 1 to 1.5KB additional 
+storage for various hardware tables.     
 **************************************************************************************************************************/
 
-#include "ooo_cpu.h"
 #include "cache.h"
-#include <vector>
-#include "log.h"
-#include "time_finder.h"
-#include "ip_classifier.h"
-
-using namespace std;
+#include "triage.h"
+#include "rap.h"
 
 #define DO_PREF
 
@@ -34,6 +29,10 @@ using namespace std;
 #define CS_TYPE 2   // constant stride
 #define CPLX_TYPE 3 // complex stride
 #define NL_TYPE 4   // next line
+
+#define TRIAGE_FILL_LEVEL FILL_L2
+#define MAX_ALLOWED_DEGREE 8
+#define RAH_SHARED_CACHE
 
 // #define SIG_DEBUG_PRINT_L2				    //Uncomment to enable debug prints
 #ifdef SIG_DEBUG_PRINT_L2
@@ -110,8 +109,17 @@ uint64_t num_misses_l2[NUM_CPUS] = {0};
 uint32_t spec_nl_l2[NUM_CPUS] = {0};
 IP_TABLE trackers[NUM_CPUS][NUM_IP_TABLE_L2_ENTRIES];
 
+TriageConfig conf[NUM_CPUS];
+Triage data[NUM_CPUS];
+RAH rah(2048);
+uint64_t last_address[NUM_CPUS];
+
+std::set<uint64_t> unique_addr;
+std::map<uint64_t, uint64_t> total_usage_count;
+std::map<uint64_t, uint64_t> actual_usage_count;
+
 uint64_t hash_bloom_l2(uint64_t addr)
-{ //对地址求hash
+{
     uint64_t first_half, sec_half;
     first_half = addr & 0xFFF;
     sec_half = (addr >> 12) & 0xFFF;
@@ -123,7 +131,7 @@ uint64_t hash_bloom_l2(uint64_t addr)
 /*decode_stride: This function decodes 7 bit stride from the metadata from IPCP at L1. 6 bits for magnitude and 1 bit for sign. */
 
 int decode_stride(uint32_t metadata)
-{ //解析由l1d传过来的metadata
+{
     int stride = 0;
     if (metadata & 0b1000000)
         stride = -1 * (metadata & 0b111111);
@@ -136,7 +144,7 @@ int decode_stride(uint32_t metadata)
 /* update_conf_l2: If the actual stride and predicted stride are equal, then the confidence counter is incremented. */
 
 int update_conf_l1(int stride, int pred_stride, int conf)
-{ //更新置信度的函数，当stride相同的时候置信度增加一
+{
     if (stride == pred_stride)
     { // use 2-bit saturating counter for confidence
         conf++;
@@ -156,7 +164,7 @@ int update_conf_l1(int stride, int pred_stride, int conf)
 /* encode_metadata_l2: This function encodes the stride, prefetch class type and speculative nl fields in the metadata. */
 
 uint32_t encode_metadata_l2(int stride, uint16_t type, int spec_nl_l2)
-{ //l2层的metadata压缩
+{
 
     uint32_t metadata = 0;
 
@@ -219,181 +227,110 @@ void stat_col_L2(uint64_t addr, uint8_t cache_hit, uint8_t cpu, uint64_t ip)
     }
 }
 
-Time_finder *time_finder = new Time_finder();
-
-namespace mix_time_l2
-{
-#define TIME_DEGREE 3
-
-    int total_num;
-    int training_num;
-    int trained_num;
-
-    //important
-    //vector<uint64_t> important_ips;
-    map<uint64_t, vector<uint64_t>> ip_pattern;
-    ChampSimLog cslog("l2c_ip_pattern.txt");
-
-    vector<uint64_t> read_important_files(string file_path)
-    {
-        ifstream file(file_path);
-        string line;
-        vector<uint64_t> line_contents;
-        if (file) // 有该文件
-        {
-            while (getline(file, line)) // line中不包括每行的换行符
-            {
-                line_contents.push_back(stoi(line));
-            }
-        }
-        else // 没有该文件
-        {
-            cout << "no such file" << endl;
-        }
-        return line_contents;
-    }
-
-    //time
-
-    map<uint64_t, uint64_t> ip_last_addr;
-    map<uint64_t, map<uint64_t, uint64_t>> ip_addr_pair;
-
-    uint64_t find_next_addr_by_first_addr(uint64_t ip, uint64_t first_addr)
-    {
-        if (ip_addr_pair[ip].find(first_addr) != ip_addr_pair[ip].end())
-        {
-            return ip_addr_pair[ip][first_addr];
-        }
-        return -1;
-    }
-
-    void update_ip_addr_pair(uint64_t ip, uint64_t last_addr, uint64_t addr)
-    {
-        if (ip_addr_pair.find(ip) == ip_addr_pair.end())
-        {
-            ip_addr_pair[ip] = map<uint64_t, uint64_t>();
-            ip_addr_pair[ip][last_addr] = addr;
-        }
-        else
-        {
-            ip_addr_pair[ip][last_addr] = addr;
-        }
-    }
-
-    void update_ip_last_addr(uint64_t ip, uint64_t addr)
-    {
-        if (ip_last_addr.find(ip) == ip_last_addr.end())
-        {
-            ip_last_addr.insert(make_pair(ip, addr));
-        }
-        else
-        {
-            uint64_t page = addr >> LOG2_PAGE_SIZE;
-            uint64_t last_addr = ip_last_addr[ip];
-            uint64_t last_page = last_addr >> LOG2_PAGE_SIZE;
-            if (page == last_page)
-            {
-                ip_last_addr[ip] = addr;
-            }
-            else
-            {
-                update_ip_addr_pair(ip, last_addr, addr);
-                ip_last_addr[ip] = addr;
-            }
-        }
-    }
-
-    vector<uint64_t> make_prefetch_by_time(uint64_t ip, uint64_t addr)
-    {
-        //make prefetch
-        vector<uint64_t> pf_addresses;
-        if (ip_addr_pair.find(ip) != ip_addr_pair.end())
-        {
-            uint64_t first_addr = addr;
-            for (int i = 0; i < TIME_DEGREE; ++i)
-            {
-                uint64_t pf_addr = find_next_addr_by_first_addr(ip, first_addr);
-                if (pf_addr != -1)
-                {
-                    //ip, addr, pf_address, FILL_L1, metadata
-                    //prefetch_line_diff_page(ip, addr, pf_addr, FILL_L1, 0);
-                    pf_addresses.push_back(pf_addr);
-                    first_addr = pf_addr;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-        //update
-        update_ip_last_addr(ip, addr);
-        return pf_addresses;
-    }
-
-    //ip classifier
-    Ip_classifier *ipClassifier_l2 = new Ip_classifier();
-}
-
-using namespace mix_time_l2;
-
 void CACHE::l2c_prefetcher_initialize()
 {
-    total_num = 0;
-    training_num = 0;
-    trained_num = 0;
+    cout << NUM_CPUS << endl;
+    conf[cpu].lookahead = 1;
+    conf[cpu].degree = 1;
+    conf[cpu].on_chip_assoc = 8;
+    conf[cpu].training_unit_size = 10000000;
+    //    conf[cpu].repl = TRIAGE_REPL_LRU;
+    conf[cpu].repl = TRIAGE_REPL_HAWKEYE;
+    //    conf[cpu].repl = TRIAGE_REPL_PERFECT;
+    //    conf[cpu].use_dynamic_assoc = true;
+    conf[cpu].use_dynamic_assoc = false;
+    int assoc_config = ASSOC_CONFIG;
+    int assoc = (assoc_config >> cpu) & 1;
+    //conf[cpu].on_chip_assoc = assoc?8:0;
+    conf[cpu].on_chip_assoc = 8;
+    conf[cpu].on_chip_set = 32768;
+    std::cout << "CPU " << cpu << " assoc: " << conf[cpu].on_chip_assoc << std::endl;
+
+    data[cpu].set_conf(&conf[cpu]);
 }
 
 uint64_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit, uint8_t type, uint64_t metadata_in)
 {
-    if (ipClassifier_l2->get_important_ips().size() > IMPORTANT_IPS_SIZE)
+    cout << "operate start" << endl;
+    if (type == LOAD)
     {
-        cout << "important_ips的大小大于:" + to_string(IMPORTANT_IPS_SIZE);
-    }
-    if (time_finder->get_trained_time_recorder_size() > TRAINED_ENTRY_NUM)
-    {
-        cout << "time_recorder的大小大于:" + to_string(TRAINED_ENTRY_NUM);
-    }
-    total_num++;
-    if (time_finder->get_trained_time_recorder_size() > TRAINED_ENTRY_NUM / 2)
-    {
-        trained_num++;
-    }
-    if (time_finder->get_training_time_recorder_size() > TRAINING_ENTRY_NUM / 2)
-    {
-        training_num++;
-    }
-    //time_ip
-    ipClassifier_l2->update(ip, addr);
-    time_finder->repl_ip(ipClassifier_l2->get_erase_time_ip());
-    vector<uint64_t> important_ips_l2 = ipClassifier_l2->get_important_ips();
-    //如果是时间特征的ip
-    if (important_ips_l2.end() != find(important_ips_l2.begin(), important_ips_l2.end(), ip))
-    { //这里应该是找到了吧？
-        if (ip_pattern.find(ip) == ip_pattern.end())
+        uint64_t addr1 = (addr >> 6) << 6;
+#ifdef RAH_SHARED_CACHE
+        rah.add_access(addr1, ip, 0, false);
+#else
+        rah.add_access(addr, pc, cpu, false);
+#endif
+        if (addr1 != last_address[cpu])
         {
-            ip_pattern[ip] = vector<uint64_t>();
-        }
-        ip_pattern[ip].push_back(addr);
-        uint64_t cache_line = (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE;
-        uint64_t page = addr >> LOG2_PAGE_SIZE;
-        vector<uint64_t> pf_addresses = time_finder->predict(cache_line);
-        time_finder->train(ip, cache_line, page);
-        //vector<uint64_t>pf_addresses = make_prefetch_by_time(ip, (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE);
 
-        for (int i = 0; i < pf_addresses.size(); ++i)
-        {
-            prefetch_line(ip, addr, pf_addresses[i], FILL_L2, 0);
+            last_address[cpu] = addr1;
+            unique_addr.insert(addr1);
+
+            int i;
+            uint64_t prefetch_addr_list[MAX_ALLOWED_DEGREE];
+            for (i = 0; i < MAX_ALLOWED_DEGREE; ++i)
+            {
+                prefetch_addr_list[i] = 0;
+            }
+            data[cpu].calculatePrefetch(ip, addr1, cache_hit, prefetch_addr_list,
+                                        MAX_ALLOWED_DEGREE, cpu);
+
+            int prefetched = 0;
+            for (i = 0; i < MAX_ALLOWED_DEGREE; ++i)
+            {
+                if (prefetch_addr_list[i] == 0)
+                {
+                    break;
+                }
+#ifdef RAH_SHARED_CACHE
+                rah.add_access(prefetch_addr_list[i], ip, 0, true);
+#else
+                rah.add_access(prefetch_addr_list[i], pc, cpu, true);
+#endif
+                PACKET test_packet;
+                test_packet.address = prefetch_addr_list[i] >> LOG2_BLOCK_SIZE;
+                test_packet.full_addr = prefetch_addr_list[i];
+                bool llc_hit = static_cast<CACHE *>(lower_level)->check_hit(&test_packet) != -1;
+                bool l2_hit = check_hit(&test_packet) != -1;
+                uint64_t md_in = addr1;
+                if (llc_hit)
+                    md_in = 0;
+                ++total_usage_count[addr1];
+                if (!l2_hit && !llc_hit)
+                {
+                    ++actual_usage_count[addr1];
+                }
+#if 1
+                int ret = prefetch_line(ip, addr1, prefetch_addr_list[i], TRIAGE_FILL_LEVEL, md_in);
+                if (ret)
+                {
+                    prefetched++;
+                    if (prefetched >= conf[cpu].degree)
+                        break;
+                }
+#endif
+            }
+            unsigned total_assoc = 0;
+            for (unsigned mycpu = 0; mycpu < NUM_CPUS; ++mycpu)
+            {
+                total_assoc += data[mycpu].get_assoc();
+            }
+            total_assoc /= NUM_CPUS;
+            assert(total_assoc < LLC_WAY);
+            if (conf[cpu].repl != TRIAGE_REPL_PERFECT)
+                static_cast<CACHE *>(lower_level)->current_assoc = LLC_WAY - total_assoc;
         }
     }
-
+    cout << "operate triage done" << endl;
+    //ipcp start
     uint64_t page = addr >> LOG2_PAGE_SIZE;
-    //uint64_t curr_tag = (page ^ (page >> 6) ^ (page >> 12)) & ((1<<NUM_IP_TAG_BITS_L2)-1);
-    uint64_t line_addr = addr >> LOG2_BLOCK_SIZE;            //cache line address
-    uint64_t line_offset = (addr >> LOG2_BLOCK_SIZE) & 0x3F; //cache line offset，即line_offset的范围是0~127
+    uint64_t curr_tag = (page ^ (page >> 6) ^ (page >> 12)) & ((1 << NUM_IP_TAG_BITS_L2) - 1);
+    uint64_t line_offset = (addr >> LOG2_BLOCK_SIZE) & 0x3F;
+    uint64_t line_addr = addr >> LOG2_BLOCK_SIZE;
     int prefetch_degree = 0;
     int64_t stride = decode_stride(metadata_in);
     uint32_t pref_type = (metadata_in & 0xF00) >> 8;
+    cout << "pref type:" << to_string(pref_type) << endl;
     uint16_t ip_tag = (ip >> NUM_IP_INDEX_BITS_L2) & ((1 << NUM_IP_TAG_BITS_L2) - 1);
     int num_prefs = 0;
     uint64_t bl_index = 0;
@@ -464,7 +401,7 @@ uint64_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache
         }
         else
         {
-            metadata = encode_metadata_l2(1, CS_TYPE, spec_nl_l2[cpu]);
+            metadata = encode_metadata_l2(1, CS_TYPE, spec_nl_l2[cpu]); // for stream, prefetch with twice the usual degree
         }
 
         for (int i = 0; i < prefetch_degree; i++)
@@ -500,45 +437,65 @@ uint64_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache
 #endif
         SIG_DP(cout << "1, ");
     }
+
     SIG_DP(cout << endl);
+    cout << "operate end" << endl;
     return metadata_in;
 }
 
 uint64_t CACHE::l2c_prefetcher_cache_fill(uint64_t addr, uint32_t set, uint32_t way, uint8_t prefetch, uint64_t evicted_addr, uint64_t metadata_in)
 {
-
-    if (prefetch)
+    cout << "fill start" << endl;
+    if (prefetch && (metadata_in & 0b111111 != 0))
     {
         uint32_t pref_type = metadata_in & 0xF00;
         pref_type = pref_type >> 8;
-
         uint64_t index = hash_bloom_l2(addr);
+        cout << "cpu:" << to_string(cpu) << " pref_type:" << to_string(pref_type) << " index:" << to_string(index) << endl;
         if (stats_l2[cpu][pref_type].bl_request[index] == 1)
         {
             stats_l2[cpu][pref_type].bl_filled[index] = 1;
             stats_l2[cpu][pref_type].bl_request[index] = 0;
         }
     }
+    else if (prefetch && (metadata_in & 0b111111 == 0)) {
+        uint64_t next_addr;
+        bool next_addr_exists = data[cpu].on_chip_data.get_next_addr(metadata_in, next_addr, 0, true);
+    }
+    cout << "fill end" << endl;
     return metadata_in;
 }
 
 void CACHE::l2c_prefetcher_final_stats()
 {
-    cout << "total operate time ：" << to_string(total_num) << endl;
-    cout << "trained num access half time: " << to_string(trained_num) << endl;
-    cout << "training num access half time: " << to_string(training_num) << endl;
+    cout << "CPU " << cpu << " TRIAGE Stats:" << endl;
 
-    for (auto ip_itor = ip_pattern.begin(); ip_itor != ip_pattern.end() ; ip_itor++) {
-        cslog.makeLog(string("ip :　" + to_string(ip_itor->first)), true);
-        for (auto addr_itor = ip_itor->second.begin(); addr_itor != ip_itor->second.end() ; addr_itor++) {
-            uint64_t addr = *addr_itor;
-            uint64_t curr_page = addr >> LOG2_PAGE_SIZE; 	//current page
-            uint64_t line_offset = (addr >> LOG2_BLOCK_SIZE) & 0x3F; 	//cache line offset
-            cslog.makeLog(string("addr : " + to_string(addr) + " page : " + to_string(curr_page) + " offset : " + to_string(line_offset)), true);
+    data[cpu].print_stats();
 
-        }
-        cslog.makeLog(("**************"), true);
+    std::map<uint64_t, uint64_t> total_pref_count;
+    std::map<uint64_t, uint64_t> actual_pref_count;
+    for (std::map<uint64_t, uint64_t>::iterator it = total_usage_count.begin(); it != total_usage_count.end(); ++it)
+    {
+        total_pref_count[it->second]++;
     }
+    for (std::map<uint64_t, uint64_t>::iterator it = actual_usage_count.begin(); it != actual_usage_count.end(); ++it)
+    {
+        actual_pref_count[it->second]++;
+    }
+
+    cout << "Unique Addr Size: " << unique_addr.size() << endl;
+
+    cout << "RAH Estimation Result: " << endl;
+    for (int core = 0; core < NUM_CPUS; ++core)
+    {
+        for (int config = 0; config < RAH_CONFIG_COUNT; ++config)
+        {
+            cout << "RAH Core " << core << " Config " << config << " Traffic: " << rah.get_traffic(core, config) << endl;
+            cout << "RAH Core " << core << " Config " << config << " Hits: " << rah.get_hits(core, config) << endl;
+            cout << "RAH Core " << core << " Config " << config << " Accesses: " << rah.get_accesses(core, config) << endl;
+        }
+    }
+    rah.print_stats();
 }
 
 void CACHE::complete_metadata_req(uint64_t meta_data_addr)

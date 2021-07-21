@@ -225,13 +225,8 @@ namespace mix_time_l2
 {
 #define TIME_DEGREE 3
 
-    int total_num;
-    int training_num;
-    int trained_num;
-
     //important
     //vector<uint64_t> important_ips;
-    vector<uint64_t> import_ips;
 
     vector<uint64_t> read_important_files(string file_path)
     {
@@ -338,56 +333,32 @@ using namespace mix_time_l2;
 
 void CACHE::l2c_prefetcher_initialize()
 {
-    total_num = 0;
-    training_num = 0;
-    trained_num = 0;
     //important_ips = read_important_files("important_ips.txt");
-    import_ips = read_important_files("import_ips.txt");
 }
 
 uint64_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit, uint8_t type, uint64_t metadata_in)
 {
-    if (ipClassifier_l2->get_important_ips().size() > IMPORTANT_IPS_SIZE)
-    {
-        cout << "important_ips的大小大于:" + to_string(IMPORTANT_IPS_SIZE);
-    }
-    if (time_finder->get_trained_time_recorder_size() > TRAINED_ENTRY_NUM)
-    {
-        cout << "time_recorder的大小大于:" + to_string(TRAINED_ENTRY_NUM);
-    }
-    total_num++;
-    if (time_finder->get_trained_time_recorder_size() > TRAINED_ENTRY_NUM / 2)
-    {
-        trained_num++;
-    }
-    if (time_finder->get_training_time_recorder_size() > TRAINING_ENTRY_NUM / 2)
-    {
-        training_num++;
-    }
     //time_ip
-    if (type == LOAD)
-    {
-        if (import_ips.end() != find(import_ips.begin(), import_ips.end(), ip))
-        {
-            ipClassifier_l2->update(ip, addr);
-            time_finder->repl_ip(ipClassifier_l2->get_erase_time_ip());
-            vector<uint64_t> important_ips_l2 = ipClassifier_l2->get_important_ips();
-            //如果是时间特征的ip
-            if (important_ips_l2.end() != find(important_ips_l2.begin(), important_ips_l2.end(), ip))
-            { //这里应该是找到了吧？
-                uint64_t cache_line = (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE;
-                uint64_t page = addr >> LOG2_PAGE_SIZE;
-                vector<uint64_t> pf_addresses = time_finder->predict(cache_line);
-                time_finder->train(ip, cache_line, page);
-                //vector<uint64_t>pf_addresses = make_prefetch_by_time(ip, (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE);
+    // if (type == LOAD)
+    // {
+    //     ipClassifier_l2->update(ip, addr);
+    //     time_finder->repl_ip(ipClassifier_l2->get_erase_time_ip());
+    //     vector<uint64_t> important_ips_l2 = ipClassifier_l2->get_important_ips();
+    //     //如果是时间特征的ip
+    //     if (important_ips_l2.end() != find(important_ips_l2.begin(), important_ips_l2.end(), ip))
+    //     { //这里应该是找到了吧？
+    //         uint64_t cache_line = (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE;
+    //         uint64_t page = addr >> LOG2_PAGE_SIZE;
+    //         vector<uint64_t> pf_addresses = time_finder->predict(cache_line);
+    //         time_finder->train(ip, cache_line, page);
+    //         //vector<uint64_t>pf_addresses = make_prefetch_by_time(ip, (addr >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE);
 
-                for (int i = 0; i < pf_addresses.size(); ++i)
-                {
-                    prefetch_line(ip, addr, pf_addresses[i], FILL_L2, 0);
-                }
-            }
-        }
-    }
+    //         for (int i = 0; i < pf_addresses.size(); ++i)
+    //         {
+    //             prefetch_line(ip, addr, pf_addresses[i], FILL_L2, 0);
+    //         }
+    //     }
+    // }
 
     uint64_t page = addr >> LOG2_PAGE_SIZE;
     //uint64_t curr_tag = (page ^ (page >> 6) ^ (page >> 12)) & ((1<<NUM_IP_TAG_BITS_L2)-1);
@@ -526,14 +497,7 @@ uint64_t CACHE::l2c_prefetcher_cache_fill(uint64_t addr, uint32_t set, uint32_t 
 
 void CACHE::l2c_prefetcher_final_stats()
 {
-    cout << "total operate time ：" << to_string(total_num) << endl;
-    cout << "trained num access half time: " << to_string(trained_num) << endl;
-    cout << "training num access half time: " << to_string(training_num) << endl;
-    cout << "l2c import_ips: " << endl;
-    for (int i = 0; i < import_ips.size(); i++)
-    {
-        cout << import_ips[i] << endl;
-    }
+
 }
 
 void CACHE::complete_metadata_req(uint64_t meta_data_addr)

@@ -1,13 +1,26 @@
 import os
 import subprocess
 
-trace_dir = "/home/hkucs/ljz/dpc3_traces"
+trace_dir = "/home/hkucs/ljz/dpc3_traces1"
 branch_name = "perceptron"
 core_num = 1
 assoc_num = 2
 repl_name = "lru"
-n_warm = 200
+n_warm = 10
 n_sim = 50
+
+def change_held(num):
+    with open("prefetcher/ip_classifier.h", "r+", encoding="utf-8") as readfile:
+        lines = readfile.readlines()
+
+    write_file = open("prefetcher/ip_classifier.h", "w+", encoding="utf-8")
+    for line in lines:
+        if "FINISH_THRESHOLD" in line:
+            write_file.write("#define FINISH_THRESHOLD {}\n".format(num))
+        elif "VICTIM_THRESHOLD" in line:
+            write_file.write("#define VICTIM_THRESHOLD -{}\n".format(num))
+        else:
+            write_file.write(line)
 
 def os_process(process_str):
     p = subprocess.Popen(process_str, shell=True)
@@ -29,7 +42,5 @@ def run_binary(binary_name, result_dir):
     os_process(process_str)
 
 if __name__=="__main__":
-    binary_list = ["perceptron-no-bo_percore-no-lru-1core-assoc2", "perceptron-no-bo_triage-no-lru-1core-assoc2", "perceptron-no-triage-no-lru-1core-assoc2", "perceptron-ipcp_isca2020-ipcp_isca2020-no-lru-1core-assoc2", "perceptron-time_mixer-time_mixer-no-lru-1core-assoc2"]
-    result_list = ["bo_percore_result", "bo_triage_result", "triage_result", "ipcp_result", "time_mixer_result"]
-    for i in range(0, len(binary_list)):
-        run_binary(binary_list[i], result_list[i])
+    binary_name = "perceptron-time_mixer_l1-time_mixer_l1-no-lru-1core-assoc2"
+    run_binary(binary_name, "result_of_3_mixstream")
