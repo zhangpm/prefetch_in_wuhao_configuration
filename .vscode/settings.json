@@ -3,6 +3,8 @@
         "iostream": "cpp",
         "vector": "cpp",
         "ostream": "cpp",
-        "*.l2c_pref": "cpp"
+        "*.l2c_pref": "cpp",
+        "*.l1d_pref": "cpp",
+        "*.llc_pref": "cpp"
     }
 }

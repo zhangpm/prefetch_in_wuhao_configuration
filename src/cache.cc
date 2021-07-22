@@ -1547,11 +1547,9 @@ int CACHE::add_pq(PACKET *packet)
     int wq_index = WQ.check_queue(packet);
     if (wq_index != -1)
     {
-
         // check fill level
         if (packet->fill_level < fill_level)
         {
-
             packet->data = WQ.entry[wq_index].data;
             if (packet->instruction)
                 upper_level_icache[packet->cpu]->return_data(packet);
